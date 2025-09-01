@@ -28,8 +28,7 @@ ANALYSIS_MODE = 'centrosome'
 # Plot generation flags
 GENERATE_ECDF_PLOTS = True
 GENERATE_BEESWARM_PLOTS = True
-GENERATE_VIOLIN_PLOTS = True
-GENERATE_VARIANCE_PLOTS = True
+GENERATE_VIOLIN_PLOTS = False
 
 # File paths
 INPUT_DIR = "imgs_segm"
@@ -299,6 +298,14 @@ def run_analysis():
         
         combined_results[['frame', 'cond', 'genotype']] = combined_results['basename'].apply(parse_filename)
         
+        # Check genotype consistency
+        unique_genotypes = combined_results['genotype'].unique()
+        if len(unique_genotypes) > 1:
+            print(f"WARNING: Multiple genotypes found: {list(unique_genotypes)}")
+            print("This analysis assumes all samples have the same genotype.")
+        elif len(unique_genotypes) == 1:
+            print(f"Genotype: {unique_genotypes[0]}")
+        
         # Calculate 70% quantiles
         quantiles_70pct = []
         for idx, row in combined_results.iterrows():
@@ -318,6 +325,13 @@ def run_analysis():
 # =============================================================================
 # VISUALIZATION FUNCTIONS
 # =============================================================================
+
+def get_plot_title_suffix(results):
+    """Get genotype info for plot titles"""
+    unique_genotypes = results['genotype'].unique()
+    if len(unique_genotypes) == 1 and unique_genotypes[0]:
+        return f" - {unique_genotypes[0]}"
+    return ""
 
 def plot_ecdf_curves(results):
     """Generate ECDF curve plots"""
@@ -362,7 +376,7 @@ def plot_ecdf_curves(results):
     plt.ylim(0, 1)
     plt.xlabel('Radius (pixels)')
     plt.ylabel('Cumulative Distribution')
-    plt.title(f'Radial ECDF Curves by Condition ({ANALYSIS_MODE.title()} Mode)')
+    plt.title(f'Radial ECDF Curves by Condition ({ANALYSIS_MODE.title()} Mode){get_plot_title_suffix(results)}')
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
@@ -395,11 +409,11 @@ def plot_ecdf_curves(results):
             
             x_values = np.arange(1, ECDF_XLIM + 1)
             
-            # Plot mean with confidence band
+            # Plot mean with confidence band (±2 SD)
             plt.plot(x_values, mean_ecdf, color=condition_colors[cond], linewidth=2, label=f"{cond} (n={len(ecdfs)})")
             plt.fill_between(x_values, 
-                            mean_ecdf - std_ecdf, 
-                            mean_ecdf + std_ecdf, 
+                            mean_ecdf - 2 * std_ecdf, 
+                            mean_ecdf + 2 * std_ecdf, 
                             color=condition_colors[cond], 
                             alpha=0.2)
     
@@ -407,7 +421,7 @@ def plot_ecdf_curves(results):
     plt.ylim(0, 1)
     plt.xlabel('Radius (pixels)')
     plt.ylabel('Cumulative Distribution')
-    plt.title(f'Mean Radial ECDF Curves by Condition ({ANALYSIS_MODE.title()} Mode, ±1 SD)')
+    plt.title(f'Mean Radial ECDF Curves by Condition ({ANALYSIS_MODE.title()} Mode, ±2 SD){get_plot_title_suffix(results)}')
     plt.legend(loc='lower right')
     plt.grid(True, alpha=0.3)
     
@@ -418,37 +432,6 @@ def plot_ecdf_curves(results):
     print("ECDF plots saved")
 
 
-def plot_variance_analysis(results):
-    """Generate variance-based plots"""
-    if not GENERATE_VARIANCE_PLOTS:
-        return
-    
-    print("Generating variance plots...")
-    
-    # Basic scatter plot (equivalent to original ggplot)
-    plt.figure(figsize=FIGURE_SIZE)
-    conditions = results['cond'].unique()
-    np.random.seed(42)  # For reproducible jitter
-    
-    for i, cond in enumerate(conditions):
-        subset = results[results['cond'] == cond]
-        # Add horizontal jitter
-        jitter = np.random.normal(0, 0.05, len(subset))
-        x_positions = i + jitter
-        plt.scatter(x_positions, np.sqrt(subset['variance']), 
-                   alpha=0.6, label=cond, s=30)
-    
-    plt.xticks(range(len(conditions)), conditions)
-    plt.ylabel('sqrt(variance)')
-    plt.xlabel('Condition')
-    plt.title(f'Radial Variance by Condition ({ANALYSIS_MODE.title()} Mode)')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(f'radial_variance_{ANALYSIS_MODE}.png', dpi=PLOT_DPI, bbox_inches='tight')
-    plt.close()
-    
-    print("Variance plots saved")
 
 
 def plot_beeswarm_analysis(results):
@@ -479,7 +462,7 @@ def plot_beeswarm_analysis(results):
     
     plt.xlabel('Condition')
     plt.ylabel('Standard Deviation (pixels)')
-    plt.title(f'Radial Standard Deviation by Condition ({ANALYSIS_MODE.title()} Mode)')
+    plt.title(f'Radial Standard Deviation by Condition ({ANALYSIS_MODE.title()} Mode){get_plot_title_suffix(results)}')
     plt.xticks(rotation=45)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
@@ -499,7 +482,7 @@ def plot_beeswarm_analysis(results):
     
     plt.xlabel('Condition')
     plt.ylabel('70% Quantile Radius (pixels)')
-    plt.title(f'70% Quantile of Radial ECDF by Condition ({ANALYSIS_MODE.title()} Mode)')
+    plt.title(f'70% Quantile of Radial ECDF by Condition ({ANALYSIS_MODE.title()} Mode){get_plot_title_suffix(results)}')
     plt.xticks(rotation=45)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
@@ -530,7 +513,7 @@ def plot_violin_analysis(results):
     
     plt.xlabel('Condition')
     plt.ylabel('70% Quantile Radius (pixels)')
-    plt.title(f'70% Quantile of Radial ECDF by Condition ({ANALYSIS_MODE.title()} Mode)')
+    plt.title(f'70% Quantile of Radial ECDF by Condition ({ANALYSIS_MODE.title()} Mode){get_plot_title_suffix(results)}')
     plt.xticks(rotation=45)
     plt.grid(True, alpha=0.3, axis='y')
     
@@ -579,7 +562,6 @@ if __name__ == "__main__":
         
         # Generate all requested plots
         plot_ecdf_curves(results)
-        plot_variance_analysis(results)
         plot_beeswarm_analysis(results)
         plot_violin_analysis(results)
         
