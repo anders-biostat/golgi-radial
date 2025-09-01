@@ -23,7 +23,7 @@ import re
 # =============================================================================
 
 # Analysis mode: 'golgi' (Golgi-centered) or 'centrosome' (centrosome-centered)
-ANALYSIS_MODE = 'golgi' #centrosome'
+ANALYSIS_MODE = 'centrosome'
 
 # Plot generation flags
 GENERATE_ECDF_PLOTS = True
@@ -37,11 +37,39 @@ OUTPUT_PREFIX = "results"
 # Filename parsing (modify this when filename structure changes)
 def parse_filename(basename):
     """Parse filename components - customize this function for new data"""
-    parts = re.split(r'_+', basename.replace(' ', '_'))
+    # Handle the specific patterns in this dataset
+    # Pattern examples:
+    # F10_30min WO_CEP250KO -> frame:F10, cond:30min WO, genotype:CEP250KO
+    # F3_NODRUG_CEP250KO -> frame:F3, cond:NODRUG, genotype:CEP250KO
+    # F11_2hDRUG_CEP250KO -> frame:F11, cond:2hDRUG, genotype:CEP250KO
+    # F9_2HWO_CEP250KO -> frame:F9, cond:2HWO, genotype:CEP250KO
+    
+    # Split on underscores first
+    parts = re.split(r'_+', basename)
     parts = [part for part in parts if part]
-    frame = parts[0] if len(parts) > 0 else ''
-    cond = parts[1] if len(parts) > 1 else ''
-    genotype = parts[2] if len(parts) > 2 else ''
+    
+    if len(parts) < 3:
+        # Fallback to original parsing
+        frame = parts[0] if len(parts) > 0 else ''
+        cond = parts[1] if len(parts) > 1 else ''
+        genotype = parts[2] if len(parts) > 2 else ''
+        return pd.Series([frame, cond, genotype])
+    
+    # Extract frame (first part)
+    frame = parts[0]
+    
+    # Extract genotype (last part, should be CEP250KO)
+    genotype = parts[-1]
+    
+    # Everything in between is the condition
+    cond_parts = parts[1:-1]
+    cond = '_'.join(cond_parts)
+    
+    # Handle special cases where condition contains spaces
+    # Convert back spaces in condition for patterns like "30min WO"
+    if 'min' in cond and 'WO' in cond:
+        cond = cond.replace('_WO', ' WO')
+    
     return pd.Series([frame, cond, genotype])
 
 # Plot settings
