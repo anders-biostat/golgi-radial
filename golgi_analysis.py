@@ -23,7 +23,7 @@ import re
 # =============================================================================
 
 # Analysis mode: 'golgi' (Golgi-centered) or 'centrosome' (centrosome-centered)
-ANALYSIS_MODE = 'centrosome'
+ANALYSIS_MODE = 'golgi' #centrosome'
 
 # Plot generation flags
 GENERATE_ECDF_PLOTS = True
