@@ -32,6 +32,7 @@ GENERATE_VIOLIN_PLOTS = False
 
 # File paths
 INPUT_DIR = "imgs_segm"
+MASK_DIR = "mask"
 OUTPUT_PREFIX = "results"
 
 # Filename parsing (modify this when filename structure changes)
@@ -220,40 +221,28 @@ def process_tiff_file(filename):
     full_path = os.path.join(INPUT_DIR, filename)
     print(f"  Reading file: {full_path}")
     
-    # Read all pages from TIFF
-    with tifffile.TiffFile(full_path) as tif:
-        pages = [page.asarray() for page in tif.pages]
-        print(f"  Found {len(pages)} pages")
-        for i, page in enumerate(pages):
-            print(f"    Page {i}: shape={page.shape}, dtype={page.dtype}")
+    # Name of Mask
+    basename = os.path.basename(filename).replace(".tif", "")
+    mask_name = f"{basename}_mask.tif"
     
-    if len(pages) < 2:
-        print(f"  Warning: Skipping {filename} - Expected at least 2 pages, got {len(pages)}")
-        return pd.DataFrame()
-    
-    # Extract first page (microscopy data) - should have 3 channels
-    first_img = pages[0]
-    if first_img.ndim != 3 or first_img.shape[2] != 3:
-        print(f"  Warning: Skipping {filename} - First page should have shape (H,W,3), got {first_img.shape}")
-        return pd.DataFrame()
-    
-    # Extract last page (segmentation) - should have segmentation in first channel
-    last_img = pages[-1]
-    if last_img.ndim != 3:
-        print(f"  Warning: Skipping {filename} - Last page should be 3D, got {last_img.ndim}D")
-        return pd.DataFrame()
-    
+    # Read Mask
+    mask_path = os.path.join(MASK_DIR, mask_name)
+
+    # Read Image and Mask Data
+    image_data = tifffile.imread(image_path)
+    mask_data = tifffile.imread(mask_path)
+
     # Extract channels
     img_golgi = first_img[:, :, 0].astype(np.float64)
     img_centr = first_img[:, :, 1].astype(np.float64) 
     img_dapi = first_img[:, :, 2].astype(np.float64)
-    img_segm = last_img[:, :, 0].astype(np.float64)  # First channel of last page
+    img_segm = mask_data.astype(np.float64)  
     
     print(f"  Extracted channels - Golgi: {img_golgi.shape}, Centrosome: {img_centr.shape}, Segmentation: {img_segm.shape}")
     
-    # Label segmented regions (equivalent to R's bwlabel)
-    segm_binary = img_segm < 0.5
-    segm_labeled, num_cells = label(segm_binary)
+    # Mask are already labled 
+    segm_labeled = img_segm
+    num_cells = int(np.max(segm_labeled))
     
     print(f"  Found {num_cells} cells")
     
@@ -368,6 +357,9 @@ def plot_ecdf_curves(results):
     
     print("Generating ECDF plots...")
     
+    # Getting Information about cond name for file name
+    genotype_info = results["genotype"].unique()[0]
+
     # Individual curves plot
     plt.figure(figsize=FIGURE_SIZE)
     
@@ -408,7 +400,7 @@ def plot_ecdf_curves(results):
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f'ecdf_curves_{ANALYSIS_MODE}.png', dpi=PLOT_DPI, bbox_inches='tight')
+    plt.savefig(f'ecdf_curves_{ANALYSIS_MODE}_{genotype_info}.png', dpi=PLOT_DPI, bbox_inches='tight')
     plt.close()
     
     # Mean curves with confidence bands
@@ -454,7 +446,7 @@ def plot_ecdf_curves(results):
     plt.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f'mean_ecdf_curves_{ANALYSIS_MODE}.png', dpi=PLOT_DPI, bbox_inches='tight')
+    plt.savefig(f'mean_ecdf_curves_{ANALYSIS_MODE}_{genotype_info}.png', dpi=PLOT_DPI, bbox_inches='tight')
     plt.close()
     
     print("ECDF plots saved")
@@ -476,6 +468,9 @@ def plot_beeswarm_analysis(results):
         print("No valid data for beeswarm plots")
         return
     
+    # Getting Information about cond name for file name
+    genotype_info = results["genotype"].unique()[0]
+
     # Standard deviation beeswarm
     plt.figure(figsize=FIGURE_SIZE)
     plot_data['std_dev'] = np.sqrt(plot_data['variance'])
@@ -494,7 +489,7 @@ def plot_beeswarm_analysis(results):
     plt.xticks(rotation=45)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
-    plt.savefig(f'beeswarm_std_dev_{ANALYSIS_MODE}.png', dpi=PLOT_DPI, bbox_inches='tight')
+    plt.savefig(f'beeswarm_std_dev_{ANALYSIS_MODE}_{genotype_info}.png', dpi=PLOT_DPI, bbox_inches='tight')
     plt.close()
     
     # 70% quantile beeswarm
@@ -514,7 +509,7 @@ def plot_beeswarm_analysis(results):
     plt.xticks(rotation=45)
     plt.grid(True, alpha=0.3, axis='y')
     plt.tight_layout()
-    plt.savefig(f'beeswarm_70pct_quantiles_{ANALYSIS_MODE}.png', dpi=PLOT_DPI, bbox_inches='tight')
+    plt.savefig(f'beeswarm_70pct_quantiles_{ANALYSIS_MODE}_{genotype_info}.png', dpi=PLOT_DPI, bbox_inches='tight')
     plt.close()
     
     print("Beeswarm plots saved")
@@ -583,9 +578,13 @@ if __name__ == "__main__":
     results = run_analysis()
     
     if not results.empty:
-        # Save results
-        output_file = f"{OUTPUT_PREFIX}_{ANALYSIS_MODE}.pkl"
-        results.to_pickle(output_file)
+        
+        # Getting Information about cond name for file name
+        genotype_info = results["genotype"].unique()[0]
+        
+        # Save results as CSV
+        output_file = f"{OUTPUT_PREFIX}_{ANALYSIS_MODE}_{genotype_info}.csv"
+        results.to_csv(output_file)
         print(f"Results saved to {output_file}")
         
         # Generate all requested plots
