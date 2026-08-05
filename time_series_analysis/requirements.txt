@@ -1,0 +1,16 @@
+numpy<2
+pandas
+tifffile
+matplotlib
+seaborn
+scipy
+scikit-image
+numba
+joblib
+cellpose
+basicpy
+hyperactive<5
+gradient-free-optimizers<1.9
+jax<=0.4.23
+jaxlib<=0.4.23
+torch
